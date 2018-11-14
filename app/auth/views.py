@@ -2,7 +2,7 @@ from flask import render_template, redirect, request, url_for, flash
 from flask_login import login_user, logout_user, login_required,current_user
 from . import auth
 from ..models import User
-from .forms import LoginForm,RegistrationForm
+from .forms import LoginForm,RegistrationForm,ChangePasswordForm,PasswordResetRequestForm,PasswordResetForm
 from .. import db
 from ..email import *
 #捕捉没有确认的用户,#用户已经登录
@@ -50,7 +50,7 @@ def logout():
 @auth.route('/register',methods=['GET','POST'])
 def register():
 	form = RegistrationForm()
-	print(form.data['email'])
+	#print(form.data['email'])
 	if form.validate_on_submit():
 		user = User( email=form.data['email'],name=form.data['name'],password=form.data['password'])
 		db.session.add(user)
@@ -65,7 +65,7 @@ def register():
 @auth.route('/confirm/<token>')
 @login_required
 def confirm(token):
-	print('confirm!')
+	#print('confirm!')
 	if current_user.confirmed:  #防止从邮箱多次验证
 		#print('已经验证过',current_user.confirmed)
 		return redirect(url_for('main.index'))
@@ -88,3 +88,56 @@ def resend_confirmation():
 	send_email(current_user.email,'Confirm your Account','auth/email/confirm',user=current_user,token=token)
 	flash('A new confirmation email has been sent to your email.')
 	return redirect(url_for('main.index'))
+	
+#修改密码功能
+@auth.route('/change-password',methods=['GET','POST'])
+@login_required
+def change_password():
+    form = ChangePasswordForm()
+    if form.validate_on_submit():
+        if current_user.verify_password(form.old_password.data):
+            current_user.password = form.password.data
+            db.session.add(current_user)
+            db.session.commit()
+            flash('Your password has been updated.')
+            return redirect(url_for('main.index'))
+        else:
+            flash('invaild password')
+    return render_template('auth/change_password.html',form=form)
+		
+#忘记密码
+@auth.route('/reset',methods=['GET','POST'])	
+def  password_reset_request():    #发送邮件
+    if not current_user.is_anonymous():
+        return redirect(url_for('main.index'))
+    form = PasswordResetRequestForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email = form.email.data).first()  #查看邮箱是否存在
+        if user:
+            token = user.generate_reset_token()
+            send_email(user.email,'Confirm Your Account','auth/email/reset_password', user=user,token=token) #发送邮件
+            flash('An email with instructions to reset your password has been '
+              'sent to you.')
+            return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html', form=form)
+
+#更换密码
+@auth.route('/reset/<token>',methods=['GET','POST'])  
+def password_reset(token):
+    if not current_user.is_anonymous():
+        print('asasas')
+        return redirect(url_for('main.index'))
+    form = PasswordResetForm()
+    if form.validate_on_submit():
+        if  User.reset_password(token,form.password.data):
+            db.session.commit()  #向数据库提交数据
+            flash('Your password has been updated.')
+            return redirect(url_for('auth.login'))
+        else:
+            return redirect(url_for('main.index'))
+    return render_template('auth/reset_password.html', form=form)
+    
+        
+        
+        
+	

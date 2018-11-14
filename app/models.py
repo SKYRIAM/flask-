@@ -67,7 +67,28 @@ class User(UserMixin,db.Model):
 		self.confirmed = True
 		db.session.add(self)
 		return True
-		
+#忘记密码，验证邮箱
+	def generate_reset_token(self, expiration=3600):   #加密邮箱序列码
+		s = Serializer(current_app.config['SECRET_KEY'], expiration)
+		return s.dumps({'reset': self.id}).decode('utf-8')
+#为什么是类函数？
+	@staticmethod
+	def reset_password(token, new_password):
+		#print('我被调用啦哇哇哇啊啊啊啊')
+		s = Serializer(current_app.config['SECRET_KEY'])
+		try:
+			data = s.loads(token.encode('utf-8'))
+			print('data',data.get)
+		except:
+			return False
+		user = User.query.get(data.get('reset')) #验证token
+		if user is None:       #用户不存在
+			return False
+		user.password=new_password
+		db.session.add(user)
+		return True
+
+	
 #要使用Flask-Login扩展，你必须在数据库模型文件(models.py)中提供一个回调函数user_loader，
 #这个回调函数用于从会话中存储的用户ID重新加载用户对象。它应该接受一个用户的id作为输入，返回相应的用户对象。
 @login_manager.user_loader
