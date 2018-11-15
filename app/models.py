@@ -87,7 +87,38 @@ class User(UserMixin,db.Model):
 		user.password=new_password
 		db.session.add(user)
 		return True
-
+		
+#-----------------修改邮箱-----------------------
+#产生修改邮箱的token
+	def generate_email_change_token(self,new_email,expiration=3600):
+		s = Serializer(current_app.config['SECRET_KEY'],expiration)
+		return s.dumps({'change_email':self.id,'new_email':new_email}).decode('utf-8')  #需要传递用户序号和新邮箱地址，用用户序号确定是否有这个用户
+		
+#验证修改邮箱的token
+	def change_email(self,token):
+		s = Serializer(current_app.config['SECRET_KEY'])
+		try:
+			data = s.loads(token.encode('utf-8'))
+			print('data over',data.get('change_email'))
+		except:
+			return False
+		if data.get('change_email') != self.id:		#验证序号
+			print(data.get('new_email'),data.get('change_email'),self.id)
+			return False
+		print('new_email',data.get('new_email'))
+		new_email = data.get('new_email')
+		if new_email is None:	#验证邮箱是否存在
+			print('new_email is None')
+			return False
+		if self.query.filter_by(email=new_email).first() is not None:   #验证是否重复，应该是为了防止在验证的这段时间里有没有新账号注册该邮箱
+			print('new is exist')
+			return False
+		self.email = new_email
+		db.session.add(self)
+		return True
+		
+		
+		
 	
 #要使用Flask-Login扩展，你必须在数据库模型文件(models.py)中提供一个回调函数user_loader，
 #这个回调函数用于从会话中存储的用户ID重新加载用户对象。它应该接受一个用户的id作为输入，返回相应的用户对象。

@@ -2,7 +2,7 @@ from flask import render_template, redirect, request, url_for, flash
 from flask_login import login_user, logout_user, login_required,current_user
 from . import auth
 from ..models import User
-from .forms import LoginForm,RegistrationForm,ChangePasswordForm,PasswordResetRequestForm,PasswordResetForm
+from .forms import LoginForm,RegistrationForm,ChangePasswordForm,PasswordResetRequestForm,PasswordResetForm,ChangeEmailForm
 from .. import db
 from ..email import *
 #捕捉没有确认的用户,#用户已经登录
@@ -114,7 +114,7 @@ def  password_reset_request():    #发送邮件
     if form.validate_on_submit():
         user = User.query.filter_by(email = form.email.data).first()  #查看邮箱是否存在
         if user:
-            token = user.generate_reset_token()
+            token = user.generate_reset_token() #生成验证链接
             send_email(user.email,'Confirm Your Account','auth/email/reset_password', user=user,token=token) #发送邮件
             flash('An email with instructions to reset your password has been '
               'sent to you.')
@@ -137,7 +137,31 @@ def password_reset(token):
             return redirect(url_for('main.index'))
     return render_template('auth/reset_password.html', form=form)
     
-        
-        
+#修改邮箱功能
+@auth.route('/change_email',methods=['GET','POST'])
+@login_required
+def change_email_request():
+    form = ChangeEmailForm()
+    if form.validate_on_submit():   #验证验证器
+        if current_user.verify_password(form.password.data):  #验证密码
+            new_email = form.email.data
+            token = current_user.generate_email_change_token(new_email)  #生成token
+            send_email(new_email,'Confirm your new email ','auth/email/change_email',user=current_user,token=token)#发送邮件
+            flash('An email with instructions to confirm your new email '
+                  'address has been sent to you.')
+            return redirect(url_for('main.index'))  #返回主界面
+        else:
+            flash('invaild password or email')
+    return render_template("auth/change_email.html", form=form)  #感觉有问题
+    
+#生成新邮箱验证地址
+@auth.route('/change_email/<token>')    
+def change_email(token):
+    if current_user.change_email(token):
+        db.session.commit()
+        flash('Your email address has been updated.')
+    else:
+        flash('Invalid request.')
+    return redirect(url_for('main.index'))
         
 	
